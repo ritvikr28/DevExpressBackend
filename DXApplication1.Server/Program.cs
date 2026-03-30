@@ -33,7 +33,27 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ReportStorageWebExtension, CustomReportStorageWebExtension>();
 builder.Services.AddMvc();
 builder.Services.AddControllers();
-builder.Services.AddCors();
+
+// Configure CORS with allowed origins from configuration
+var allowedOrigins = builder.Configuration.GetValue<string>("AllowedOrigins");
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        if (!string.IsNullOrEmpty(allowedOrigins))
+        {
+            var origins = allowedOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            policy.WithOrigins(origins);
+        }
+        else
+        {
+            // In development, allow any origin; in production, require explicit configuration
+            policy.AllowAnyOrigin();
+        }
+        policy.AllowAnyMethod();
+        policy.AllowAnyHeader();
+    });
+});
 
 builder.Services.ConfigureReportingServices(configurator =>
 {
@@ -60,20 +80,14 @@ AccessSettings.ReportingSpecificResources.SetRules(contentDirectoryAllowRule, Ur
 DevExpress.XtraReports.Configuration.Settings.Default.UserDesignerOptions.DataBindingMode = DevExpress.XtraReports.UI.DataBindingMode.Expressions;
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
 app.UseRouting();
 
 // Add Authentication and Authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors(builder => builder
-    .WithOrigins("http://localhost:3000")
-    .AllowAnyMethod()
-    .AllowAnyHeader());
+app.UseCors();
 app.UseDevExpressControls();
 System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12;
 app.UseEndpoints(endpoints => endpoints.MapControllers().RequireAuthorization());
-
-app.MapFallbackToFile("/index.html");
 
 app.Run();

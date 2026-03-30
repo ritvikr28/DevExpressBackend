@@ -1,7 +1,3 @@
 <Solution>
-  <Project Path="DXApplication1.Client/DXApplication1.client.esproj">
-    <Build />
-    <Deploy />
-  </Project>
   <Project Path="DXApplication1.Server/DXApplication1.Server.csproj" />
 </Solution>
