@@ -1,0 +1,26 @@
+@import url("../../../node_modules/ace-builds/css/ace.css");
+@import url("../../../node_modules/ace-builds/css/theme/dreamweaver.css");
+@import url("../../../node_modules/devextreme/dist/css/dx.material.blue.light.css");
+@import url("../../../node_modules/@devexpress/analytics-core/dist/css/dx-analytics.common.css");
+@import url("../../../node_modules/@devexpress/analytics-core/dist/css/dx-analytics.material.blue.light.css");
+@import url("../../../node_modules/@devexpress/analytics-core/dist/css/dx-querybuilder.css");
+@import url("../../../node_modules/devexpress-reporting/dist/css/dx-webdocumentviewer.css");
+@import url("../../../node_modules/devexpress-reporting/dist/css/dx-reportdesigner.css");
+
+.report-designer-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 90px);
+}
+
+.selected-sources-banner {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 8px 16px;
+    border-radius: 0;
+}
+
+.selected-sources-banner .badge {
+    font-size: 0.85em;
+}

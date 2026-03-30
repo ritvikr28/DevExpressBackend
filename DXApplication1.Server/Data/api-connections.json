@@ -1,0 +1,26 @@
+[
+  {
+    "Name": "Pupil",
+    "ConnectionString": "Uri={baseUrl}/api/v1/data?dataSourceName=Pupil&IsSchemaCall=true;RootElement="
+  },
+  {
+    "Name": "Staff",
+    "ConnectionString": "Uri={baseUrl}/api/v1/data?dataSourceName=Staff&IsSchemaCall=true;RootElement="
+  },
+  {
+    "Name": "Assessment",
+    "ConnectionString": "Uri={baseUrl}/api/v1/data?dataSourceName=Assessment&IsSchemaCall=true;RootElement="
+  },
+  {
+    "Name": "PupilDynamic",
+    "ConnectionString": "Uri={baseUrl}/api/v1/data?dataSourceName=Pupil&columns={?PupilColumns};RootElement="
+  },
+  {
+    "Name": "StaffDynamic",
+    "ConnectionString": "Uri={baseUrl}/api/v1/data?dataSourceName=Staff&columns={?StaffColumns};RootElement="
+  },
+  {
+    "Name": "AssessmentDynamic",
+    "ConnectionString": "Uri={baseUrl}/api/v1/data?dataSourceName=Assessment&columns={?AssessmentColumns};RootElement="
+  }
+]

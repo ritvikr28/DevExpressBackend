@@ -1,0 +1,16 @@
+[
+  {
+    "AssessmentId": 1,
+    "PupilId": 1,
+    "Subject": "Math",
+    "Score": 95.5,
+    "Date": "2023-11-15"
+  },
+  {
+    "AssessmentId": 2,
+    "PupilId": 2,
+    "Subject": "Science",
+    "Score": 88.0,
+    "Date": "2023-11-16"
+  }
+]

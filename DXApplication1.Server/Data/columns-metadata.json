@@ -1,0 +1,68 @@
+{
+  "Pupil": [
+    {
+      "name": "PupilId",
+      "type": "int"
+    },
+    {
+      "name": "FirstName",
+      "type": "string"
+    },
+    {
+      "name": "LastName",
+      "type": "string"
+    },
+    {
+      "name": "DateOfBirth",
+      "type": "date"
+    },
+    {
+      "name": "Class",
+      "type": "string"
+    }
+  ],
+  "Staff": [
+    {
+      "name": "StaffId",
+      "type": "int"
+    },
+    {
+      "name": "FirstName",
+      "type": "string"
+    },
+    {
+      "name": "LastName",
+      "type": "string"
+    },
+    {
+      "name": "Role",
+      "type": "string"
+    },
+    {
+      "name": "Department",
+      "type": "string"
+    }
+  ],
+  "Assessment": [
+    {
+      "name": "AssessmentId",
+      "type": "int"
+    },
+    {
+      "name": "PupilId",
+      "type": "int"
+    },
+    {
+      "name": "Subject",
+      "type": "string"
+    },
+    {
+      "name": "Score",
+      "type": "decimal"
+    },
+    {
+      "name": "Date",
+      "type": "date"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "StaffId": 1,
+    "FirstName": "Carol",
+    "LastName": "Williams",
+    "Role": "Teacher",
+    "Department": "Mathematics"
+  },
+  {
+    "StaffId": 2,
+    "FirstName": "David",
+    "LastName": "Brown",
+    "Role": "Principal",
+    "Department": "Administration"
+  }
+]
