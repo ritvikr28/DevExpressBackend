@@ -33,7 +33,27 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ReportStorageWebExtension, CustomReportStorageWebExtension>();
 builder.Services.AddMvc();
 builder.Services.AddControllers();
-builder.Services.AddCors();
+
+// Configure CORS with allowed origins from configuration
+var allowedOrigins = builder.Configuration.GetValue<string>("AllowedOrigins");
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        if (!string.IsNullOrEmpty(allowedOrigins))
+        {
+            var origins = allowedOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            policy.WithOrigins(origins);
+        }
+        else
+        {
+            // In development, allow any origin; in production, require explicit configuration
+            policy.AllowAnyOrigin();
+        }
+        policy.AllowAnyMethod();
+        policy.AllowAnyHeader();
+    });
+});
 
 builder.Services.ConfigureReportingServices(configurator =>
 {
@@ -65,10 +85,7 @@ app.UseRouting();
 // Add Authentication and Authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors(builder => builder
-    .AllowAnyOrigin()
-    .AllowAnyMethod()
-    .AllowAnyHeader());
+app.UseCors();
 app.UseDevExpressControls();
 System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12;
 app.UseEndpoints(endpoints => endpoints.MapControllers().RequireAuthorization());
