@@ -60,20 +60,17 @@ AccessSettings.ReportingSpecificResources.SetRules(contentDirectoryAllowRule, Ur
 DevExpress.XtraReports.Configuration.Settings.Default.UserDesignerOptions.DataBindingMode = DevExpress.XtraReports.UI.DataBindingMode.Expressions;
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
 app.UseRouting();
 
 // Add Authentication and Authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(builder => builder
-    .WithOrigins("http://localhost:3000")
+    .AllowAnyOrigin()
     .AllowAnyMethod()
     .AllowAnyHeader());
 app.UseDevExpressControls();
 System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12;
 app.UseEndpoints(endpoints => endpoints.MapControllers().RequireAuthorization());
-
-app.MapFallbackToFile("/index.html");
 
 app.Run();
