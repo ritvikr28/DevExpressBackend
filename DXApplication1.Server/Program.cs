@@ -18,6 +18,8 @@ using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Set DataDirectory for DevExpress to locate data files relative to content root
+AppDomain.CurrentDomain.SetData("DataDirectory", builder.Environment.ContentRootPath);
 builder.Services.AddDevExpressControls();
 
 // Register Azure Blob Storage service
@@ -63,6 +65,12 @@ builder.Services.ConfigureReportingServices(configurator =>
     {
         // Register your API-based connection provider for the designer
         designerConfigurator.RegisterDataSourceWizardJsonConnectionStorage<CustomApiDataConnectionStorage>(true);
+        
+        // NOTE: Data source wizard buttons (Add SQL/Object/JSON/Federated DataSource) are hidden
+        // via the frontend CustomizeMenuActions callback in the React ReportDesigner component.
+        // DevExpress 25.2.x does not expose DataSourceWizardSettings on the server-side
+        // ReportDesignerConfigurationBuilder. The frontend approach using action.visible = false
+        // effectively hides these buttons from users while maintaining the backend API capability.
     });
     configurator.ConfigureWebDocumentViewer(viewerConfigurator =>
     {
@@ -74,6 +82,11 @@ builder.Services.ConfigureReportingServices(configurator =>
 });
 
 var app = builder.Build();
+
+// Configure content directory access for DevExpress resources
+var contentDirectoryAllowRule = DirectoryAccessRule.Allow(new DirectoryInfo(Path.Combine(app.Environment.ContentRootPath, "Content")).FullName);
+AccessSettings.ReportingSpecificResources.SetRules(contentDirectoryAllowRule, UrlAccessRule.Deny());
+
 DevExpress.XtraReports.Configuration.Settings.Default.UserDesignerOptions.DataBindingMode = DevExpress.XtraReports.UI.DataBindingMode.Expressions;
 
 app.UseHttpsRedirection();
