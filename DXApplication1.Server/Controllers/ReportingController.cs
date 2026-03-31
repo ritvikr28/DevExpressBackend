@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace DXApplication1.Server.Controllers
@@ -28,12 +29,26 @@ namespace DXApplication1.Server.Controllers
         private readonly IAzureBlobStorageService _azureBlobStorageService;
         private readonly ILogger<ReportingController> _logger;
 
+        // Regex pattern for sanitizing log values - removes newlines and control characters
+        private static readonly Regex LogSanitizePattern = new Regex(@"[\r\n\t]+", RegexOptions.Compiled);
+
         public ReportingController(
             IAzureBlobStorageService azureBlobStorageService,
             ILogger<ReportingController> logger)
         {
             _azureBlobStorageService = azureBlobStorageService;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Sanitizes a string for safe logging by removing newlines and control characters.
+        /// This prevents log forging attacks.
+        /// </summary>
+        private static string SanitizeForLog(string? value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+            return LogSanitizePattern.Replace(value, " ");
         }
 
         /// <summary>
@@ -179,7 +194,7 @@ namespace DXApplication1.Server.Controllers
 
                 _logger.LogInformation(
                     "Report saved successfully: {ReportName} (SaveAs: {SaveAs})",
-                    targetReportName,
+                    SanitizeForLog(targetReportName),
                     request.SaveAs);
 
                 return Ok(new SaveReportResponse
@@ -192,7 +207,7 @@ namespace DXApplication1.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to save report: {ReportUrl}", request.ReportUrl);
+                _logger.LogError(ex, "Failed to save report: {ReportUrl}", SanitizeForLog(request.ReportUrl));
                 return StatusCode(500, new { error = "Failed to save report" });
             }
         }
@@ -224,7 +239,7 @@ namespace DXApplication1.Server.Controllers
                 }
 
                 // Try to get from Azure Blob Storage
-                var stream = _azureBlobStorageService.DownloadReportSync(reportName);
+                using var stream = _azureBlobStorageService.DownloadReportSync(reportName);
                 if (stream != null)
                 {
                     using var reader = new StreamReader(stream);
@@ -236,7 +251,7 @@ namespace DXApplication1.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to get report layout: {ReportName}", reportName);
+                _logger.LogError(ex, "Failed to get report layout: {ReportName}", SanitizeForLog(reportName));
                 return StatusCode(500, new { error = "Failed to retrieve report layout" });
             }
         }
