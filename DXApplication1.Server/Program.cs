@@ -18,7 +18,6 @@ using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-AppDomain.CurrentDomain.SetData("DataDirectory", builder.Environment.ContentRootPath);
 builder.Services.AddDevExpressControls();
 
 // Register Azure Blob Storage service
@@ -75,8 +74,6 @@ builder.Services.ConfigureReportingServices(configurator =>
 });
 
 var app = builder.Build();
-var contentDirectoryAllowRule = DirectoryAccessRule.Allow(new DirectoryInfo(Path.Combine(app.Environment.ContentRootPath, "Content")).FullName);
-AccessSettings.ReportingSpecificResources.SetRules(contentDirectoryAllowRule, UrlAccessRule.Deny());
 DevExpress.XtraReports.Configuration.Settings.Default.UserDesignerOptions.DataBindingMode = DevExpress.XtraReports.UI.DataBindingMode.Expressions;
 
 app.UseHttpsRedirection();
@@ -88,6 +85,6 @@ app.UseAuthorization();
 app.UseCors();
 app.UseDevExpressControls();
 System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12;
-app.UseEndpoints(endpoints => endpoints.MapControllers().RequireAuthorization());
+app.UseEndpoints(endpoints => endpoints.MapControllers());
 
 app.Run();
