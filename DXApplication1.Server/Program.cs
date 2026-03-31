@@ -83,9 +83,13 @@ builder.Services.ConfigureReportingServices(configurator =>
 
 var app = builder.Build();
 
-// Configure content directory access for DevExpress resources
-var contentDirectoryAllowRule = DirectoryAccessRule.Allow(new DirectoryInfo(Path.Combine(app.Environment.ContentRootPath, "Content")).FullName);
-AccessSettings.ReportingSpecificResources.SetRules(contentDirectoryAllowRule, UrlAccessRule.Deny());
+// Configure content directory access for DevExpress resources (if the Content directory exists)
+var contentDirectoryPath = Path.Combine(app.Environment.ContentRootPath, "Content");
+if (Directory.Exists(contentDirectoryPath))
+{
+    var contentDirectoryAllowRule = DirectoryAccessRule.Allow(new DirectoryInfo(contentDirectoryPath).FullName);
+    AccessSettings.ReportingSpecificResources.SetRules(contentDirectoryAllowRule, UrlAccessRule.Deny());
+}
 
 DevExpress.XtraReports.Configuration.Settings.Default.UserDesignerOptions.DataBindingMode = DevExpress.XtraReports.UI.DataBindingMode.Expressions;
 
