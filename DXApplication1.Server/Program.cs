@@ -25,6 +25,11 @@ builder.Services.AddDevExpressControls();
 // Register Azure Blob Storage service
 builder.Services.AddSingleton<IAzureBlobStorageService, AzureBlobStorageService>();
 
+// Register in-memory report session store (maps tokens to learner ID arrays)
+builder.Services.AddSingleton<ReportSessionStore>();
+
+builder.Services.AddHttpClient();
+
 builder.Services.AddClaimResolverServiceCollection();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 .AddScheme<JwtBearerOptions, JwtAuthenticationHandler>(JwtBearerDefaults.AuthenticationScheme, _ => { });
