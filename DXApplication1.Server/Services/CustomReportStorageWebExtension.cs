@@ -2,7 +2,6 @@
 using DevExpress.XtraReports.Parameters;
 using DevExpress.XtraReports.UI;
 using DXApplication1.PredefinedReports;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
@@ -21,20 +20,17 @@ namespace DXApplication1.Services
         private readonly IAzureBlobStorageService _azureBlobStorageService;
         private readonly ILogger<CustomReportStorageWebExtension> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly string _learnersEndpoint;
 
         public CustomReportStorageWebExtension(
             IAzureBlobStorageService azureBlobStorageService,
             ILogger<CustomReportStorageWebExtension> logger,
             IHttpClientFactory httpClientFactory,
-            IHttpContextAccessor httpContextAccessor,
             IConfiguration configuration)
         {
             _azureBlobStorageService = azureBlobStorageService;
             _logger = logger;
             _httpClientFactory = httpClientFactory;
-            _httpContextAccessor = httpContextAccessor;
             _learnersEndpoint = configuration["SimsApi:LearnersSearchEndpoint"]
                 ?? "https://apisql-dev.learners.sims.co.uk/api/v6/data-export/learners-search";
         }
@@ -154,12 +150,8 @@ namespace DXApplication1.Services
                 ids = ids.Take(maxPageSize).ToArray();
             }
 
-            var bearerToken = GetBearerToken();
-
-            var client = _httpClientFactory.CreateClient();
-            if (!string.IsNullOrEmpty(bearerToken))
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+            // Use the named client that automatically forwards the bearer token
+            var client = _httpClientFactory.CreateClient("AuthenticatedApi");
 
             var body = new
             {
@@ -328,14 +320,6 @@ namespace DXApplication1.Services
         {
             SetData(report, defaultUrl);
             return defaultUrl;
-        }
-
-        private string? GetBearerToken()
-        {
-            var authHeader = _httpContextAccessor.HttpContext?.Request.Headers.Authorization.FirstOrDefault();
-            if (authHeader?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true)
-                return authHeader.Substring("Bearer ".Length).Trim();
-            return null;
         }
     }
 }
