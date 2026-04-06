@@ -5,6 +5,8 @@ namespace DXApplication1.Services
 {
     // Singleton: holds short-lived report ID sessions created via POST /api/reports/session.
     // Avoids encoding large ID sets in the report URL.
+    // NOTE: Sessions are currently stored indefinitely (no expiry). For production use,
+    // consider implementing TTL-based cleanup or a distributed cache to prevent unbounded memory growth.
     public class ReportSessionStore
     {
         private readonly ConcurrentDictionary<string, int[]> _sessions = new();

@@ -66,6 +66,10 @@ namespace DXApplication1.Services
                 return bytes;
 
             return InjectLiveData(bytes, rawIds).GetAwaiter().GetResult();
+            // NOTE: GetData is a synchronous DevExpress override and cannot be made async.
+            // .GetAwaiter().GetResult() is used intentionally here. This is safe as long as the
+            // ASP.NET Core synchronisation context is not active in this code path (DevExpress
+            // calls GetData from a thread-pool thread, not from the request thread directly).
         }
 
         private byte[] GetReportBytes(string reportName)
@@ -142,6 +146,13 @@ namespace DXApplication1.Services
 
             if (ids.Length == 0)
                 return "[]";
+
+            const int maxPageSize = 500;
+            if (ids.Length > maxPageSize)
+            {
+                _logger.LogWarning("FetchApiJson: {Count} IDs exceed the maximum page size of {Max}; only the first {Max} will be fetched.", ids.Length, maxPageSize, maxPageSize);
+                ids = ids.Take(maxPageSize).ToArray();
+            }
 
             var bearerToken = GetBearerToken();
 
@@ -275,7 +286,7 @@ namespace DXApplication1.Services
 
         public override async Task AfterGetDataAsync(string url, XtraReport report)
         {
-            // When url is non-empty the viewer already injected live data in GetData – skip.
+            // When url is non-empty, live data was already injected in GetData – skip to avoid duplicate injection.
             if (!string.IsNullOrEmpty(url))
                 return;
 
