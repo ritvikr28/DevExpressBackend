@@ -14,14 +14,14 @@ namespace DXApplication1.Services
 {
     /// <summary>
     /// Azure Blob Storage implementation for storing generated per-pupil reports.
-    /// Uses blob tags for efficient filtering by OrgId and UserExternalId.
+    /// Uses organization-based containers (one container per OrgId) with unique blob names.
+    /// Blob structure: {containerPrefix}-{orgId} / {userExternalId}/{reportName}_{learnerExternalId}_{timestamp}.{format}
     /// </summary>
     public class GeneratedReportStorageService : IGeneratedReportStorageService
     {
-        private readonly BlobContainerClient _containerClient;
         private readonly BlobServiceClient _blobServiceClient;
         private readonly ILogger<GeneratedReportStorageService> _logger;
-        private readonly string _containerName;
+        private readonly string _containerPrefix;
 
         // Regex pattern for sanitizing log values - removes newlines and control characters
         private static readonly Regex LogSanitizePattern = new Regex(@"[\r\n\t]+", RegexOptions.Compiled);
@@ -31,7 +31,7 @@ namespace DXApplication1.Services
             _logger = logger;
 
             var connectionString = configuration["AzureStorage:ConnectionString"];
-            _containerName = configuration["AzureStorage:GeneratedReportsContainerName"] ?? "generated-reports";
+            _containerPrefix = configuration["AzureStorage:GeneratedReportsContainerPrefix"] ?? "org";
 
             if (string.IsNullOrEmpty(connectionString))
             {
@@ -42,16 +42,72 @@ namespace DXApplication1.Services
             try
             {
                 _blobServiceClient = new BlobServiceClient(connectionString);
-                _containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-                _containerClient.CreateIfNotExists(PublicAccessType.None);
                 _logger.LogInformation(
-                    "Generated Report Storage service initialized successfully. Container: {ContainerName}",
-                    _containerName);
+                    "Generated Report Storage service initialized successfully. Container prefix: {ContainerPrefix}",
+                    _containerPrefix);
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException("Failed to initialize Generated Report Storage service.", ex);
             }
+        }
+
+        /// <summary>
+        /// Gets or creates a container for the specified organization.
+        /// Container name format: {prefix}-{sanitizedOrgId}
+        /// </summary>
+        private async Task<BlobContainerClient> GetOrCreateOrgContainerAsync(string orgId)
+        {
+            var containerName = GetContainerName(orgId);
+            var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
+            await containerClient.CreateIfNotExistsAsync(PublicAccessType.None);
+            return containerClient;
+        }
+
+        /// <summary>
+        /// Gets a container client for the specified organization (without creating).
+        /// </summary>
+        private BlobContainerClient GetOrgContainer(string orgId)
+        {
+            var containerName = GetContainerName(orgId);
+            return _blobServiceClient.GetBlobContainerClient(containerName);
+        }
+
+        /// <summary>
+        /// Generates the container name for an organization.
+        /// Azure container names must be lowercase, 3-63 characters, start with letter or number.
+        /// </summary>
+        private string GetContainerName(string orgId)
+        {
+            var safeOrgId = SanitizeContainerName(orgId);
+            return $"{_containerPrefix}-{safeOrgId}".ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Sanitizes a string for use in Azure container names.
+        /// Container names can only contain lowercase letters, numbers, and hyphens.
+        /// </summary>
+        private static string SanitizeContainerName(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return "unknown";
+
+            // Replace invalid characters with hyphens, convert to lowercase
+            var result = Regex.Replace(input.ToLowerInvariant(), @"[^a-z0-9-]", "-");
+
+            // Remove consecutive hyphens
+            result = Regex.Replace(result, @"-+", "-");
+
+            // Trim hyphens from start/end
+            result = result.Trim('-');
+
+            // Ensure minimum length of 3 and max of 63 (minus prefix)
+            if (result.Length < 1)
+                result = "unknown";
+            if (result.Length > 50)
+                result = result.Substring(0, 50);
+
+            return result;
         }
 
         /// <summary>
@@ -66,22 +122,20 @@ namespace DXApplication1.Services
 
         /// <summary>
         /// Generates a unique blob name for a generated report.
-        /// Format: {orgId}/{userExternalId}/{reportName}_{learnerExternalId}_{timestamp}.{format}
+        /// Format: {userExternalId}/{reportName}_{learnerExternalId}_{timestamp}.{format}
         /// </summary>
         private static string GenerateBlobName(
-            string orgId,
             string userExternalId,
             string reportName,
             string learnerExternalId,
             string format)
         {
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff");
             var safeReportName = SanitizeFileName(reportName);
             var safeLearnerExternalId = SanitizeFileName(learnerExternalId);
-            var safeOrgId = SanitizeFileName(orgId);
             var safeUserExternalId = SanitizeFileName(userExternalId);
 
-            return $"{safeOrgId}/{safeUserExternalId}/{safeReportName}_{safeLearnerExternalId}_{timestamp}.{format}";
+            return $"{safeUserExternalId}/{safeReportName}_{safeLearnerExternalId}_{timestamp}.{format}";
         }
 
         /// <summary>
@@ -123,8 +177,9 @@ namespace DXApplication1.Services
             string userExternalId,
             string format = "pdf")
         {
-            var blobName = GenerateBlobName(orgId, userExternalId, reportName, learnerExternalId, format);
-            var blobClient = _containerClient.GetBlobClient(blobName);
+            var containerClient = await GetOrCreateOrgContainerAsync(orgId);
+            var blobName = GenerateBlobName(userExternalId, reportName, learnerExternalId, format);
+            var blobClient = containerClient.GetBlobClient(blobName);
 
             try
             {
@@ -139,16 +194,17 @@ namespace DXApplication1.Services
                     _ => "application/octet-stream"
                 };
 
-                // Upload with blob tags for efficient filtering
+                // Upload with metadata (stored in blob metadata, not tags)
                 var uploadOptions = new BlobUploadOptions
                 {
                     HttpHeaders = new BlobHttpHeaders { ContentType = contentType },
-                    Tags = new Dictionary<string, string>
+                    Metadata = new Dictionary<string, string>
                     {
-                        ["OrgId"] = SanitizeTagValue(orgId),
-                        ["UserExternalId"] = SanitizeTagValue(userExternalId),
-                        ["ReportName"] = SanitizeTagValue(reportName),
-                        ["LearnerExternalId"] = SanitizeTagValue(learnerExternalId),
+                        ["OrgId"] = orgId,
+                        ["UserExternalId"] = userExternalId,
+                        ["ReportName"] = reportName,
+                        ["LearnerExternalId"] = learnerExternalId,
+                        ["LearnerName"] = learnerName,
                         ["Format"] = format,
                         ["GeneratedAt"] = DateTime.UtcNow.ToString("O")
                     }
@@ -171,8 +227,9 @@ namespace DXApplication1.Services
                 };
 
                 _logger.LogInformation(
-                    "Generated report uploaded successfully: {BlobName} for learner {LearnerExternalId}",
+                    "Generated report uploaded successfully: {BlobName} in container {ContainerName} for learner {LearnerExternalId}",
                     SanitizeForLog(blobName),
+                    SanitizeForLog(containerClient.Name),
                     SanitizeForLog(learnerExternalId));
 
                 return metadata;
@@ -188,20 +245,20 @@ namespace DXApplication1.Services
         }
 
         /// <summary>
-        /// Sanitizes a tag value for Azure Blob Storage tags.
-        /// Tags have restrictions: alphanumeric, +, -, ., :, =, _, max 256 chars.
+        /// Sanitizes a metadata value for Azure Blob Storage.
+        /// Metadata values should be ASCII-safe strings.
         /// </summary>
-        private static string SanitizeTagValue(string value)
+        private static string SanitizeMetadataValue(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return "unknown";
 
-            // Replace invalid characters
-            var result = Regex.Replace(value, @"[^a-zA-Z0-9+\-.:=_]", "_");
+            // Replace non-ASCII and control characters
+            var result = Regex.Replace(value, @"[^\x20-\x7E]", "_");
 
-            // Truncate to 256 characters (Azure tag value limit)
-            if (result.Length > 256)
-                result = result.Substring(0, 256);
+            // Truncate to reasonable length
+            if (result.Length > 1024)
+                result = result.Substring(0, 1024);
 
             return result;
         }
@@ -212,57 +269,61 @@ namespace DXApplication1.Services
 
             try
             {
-                // Use blob tags to filter efficiently
-                // Query format: "OrgId" = 'value' AND "UserExternalId" = 'value'
-                var sanitizedOrgId = SanitizeTagValue(orgId);
-                var sanitizedUserExternalId = SanitizeTagValue(userExternalId);
-                var tagQuery = $"\"OrgId\" = '{sanitizedOrgId}' AND \"UserExternalId\" = '{sanitizedUserExternalId}'";
+                var containerClient = GetOrgContainer(orgId);
 
-                await foreach (var taggedBlob in _blobServiceClient.FindBlobsByTagsAsync(tagQuery))
+                // Check if container exists
+                if (!await containerClient.ExistsAsync())
                 {
-                    // Only include blobs from our container
-                    if (!taggedBlob.BlobContainerName.Equals(_containerName, StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    _logger.LogInformation(
+                        "No container found for org {OrgId}, returning empty list",
+                        SanitizeForLog(orgId));
+                    return reports;
+                }
 
-                    var containerClient = _blobServiceClient.GetBlobContainerClient(taggedBlob.BlobContainerName);
-                    var blobClient = containerClient.GetBlobClient(taggedBlob.BlobName);
+                // List blobs with the user's prefix (blobs are stored as {userExternalId}/...)
+                var prefix = $"{SanitizeFileName(userExternalId)}/";
 
-                    try
+                await foreach (var blobItem in containerClient.GetBlobsAsync(
+                    traits: BlobTraits.Metadata,
+                    prefix: prefix))
+                {
+                    var metadata = new GeneratedReportMetadata
                     {
-                        var properties = await blobClient.GetPropertiesAsync();
-                        var tags = await blobClient.GetTagsAsync();
+                        Id = ExtractReportId(blobItem.Name),
+                        BlobName = blobItem.Name,
+                        OrgId = orgId,
+                        UserExternalId = userExternalId,
+                        FileSizeBytes = blobItem.Properties.ContentLength ?? 0,
+                        GeneratedAt = blobItem.Properties.CreatedOn?.UtcDateTime ?? DateTime.UtcNow
+                    };
 
-                        var metadata = new GeneratedReportMetadata
-                        {
-                            Id = ExtractReportId(taggedBlob.BlobName),
-                            BlobName = taggedBlob.BlobName,
-                            OrgId = orgId,
-                            UserExternalId = userExternalId,
-                            FileSizeBytes = properties.Value.ContentLength,
-                            GeneratedAt = properties.Value.CreatedOn?.UtcDateTime ?? DateTime.UtcNow
-                        };
-
-                        // Extract additional metadata from tags
-                        if (tags.Value.Tags.TryGetValue("ReportName", out var reportName))
+                    // Extract additional metadata from blob metadata
+                    if (blobItem.Metadata != null)
+                    {
+                        if (blobItem.Metadata.TryGetValue("ReportName", out var reportName))
                             metadata.ReportName = reportName;
-                        if (tags.Value.Tags.TryGetValue("LearnerExternalId", out var learnerId))
+                        if (blobItem.Metadata.TryGetValue("LearnerExternalId", out var learnerId))
                             metadata.LearnerExternalId = learnerId;
-                        if (tags.Value.Tags.TryGetValue("Format", out var format))
+                        if (blobItem.Metadata.TryGetValue("LearnerName", out var learnerName))
+                            metadata.LearnerName = learnerName;
+                        if (blobItem.Metadata.TryGetValue("Format", out var format))
                             metadata.Format = format;
+                    }
 
-                        reports.Add(metadata);
-                    }
-                    catch (RequestFailedException ex) when (ex.Status == 404)
-                    {
-                        // Blob was deleted between tag query and property fetch, skip it
-                        continue;
-                    }
+                    reports.Add(metadata);
                 }
 
                 _logger.LogInformation(
                     "Listed {Count} generated reports for user {UserExternalId} in org {OrgId}",
                     reports.Count,
                     SanitizeForLog(userExternalId),
+                    SanitizeForLog(orgId));
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                // Container doesn't exist, return empty list
+                _logger.LogInformation(
+                    "Container not found for org {OrgId}, returning empty list",
                     SanitizeForLog(orgId));
             }
             catch (Exception ex)
@@ -284,54 +345,64 @@ namespace DXApplication1.Services
         {
             try
             {
-                // Use blob tags to find the report and validate access
-                var sanitizedOrgId = SanitizeTagValue(orgId);
-                var sanitizedUserExternalId = SanitizeTagValue(userExternalId);
+                var containerClient = GetOrgContainer(orgId);
 
-                // Search for blob by tags including the report ID pattern in the name
-                var tagQuery = $"\"OrgId\" = '{sanitizedOrgId}' AND \"UserExternalId\" = '{sanitizedUserExternalId}'";
-
-                await foreach (var taggedBlob in _blobServiceClient.FindBlobsByTagsAsync(tagQuery))
+                // Check if container exists
+                if (!await containerClient.ExistsAsync())
                 {
-                    if (!taggedBlob.BlobContainerName.Equals(_containerName, StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    _logger.LogWarning(
+                        "Container not found for org {OrgId} when downloading report {ReportId}",
+                        SanitizeForLog(orgId),
+                        SanitizeForLog(reportId));
+                    return (null, null);
+                }
 
-                    var blobReportId = ExtractReportId(taggedBlob.BlobName);
+                // List blobs with the user's prefix to find the matching report
+                var prefix = $"{SanitizeFileName(userExternalId)}/";
+
+                await foreach (var blobItem in containerClient.GetBlobsAsync(
+                    traits: BlobTraits.Metadata,
+                    prefix: prefix))
+                {
+                    var blobReportId = ExtractReportId(blobItem.Name);
                     if (!blobReportId.Equals(reportId, StringComparison.OrdinalIgnoreCase))
                         continue;
 
                     // Found the matching blob
-                    var containerClient = _blobServiceClient.GetBlobContainerClient(taggedBlob.BlobContainerName);
-                    var blobClient = containerClient.GetBlobClient(taggedBlob.BlobName);
+                    var blobClient = containerClient.GetBlobClient(blobItem.Name);
 
                     var memoryStream = new MemoryStream();
                     await blobClient.DownloadToAsync(memoryStream);
                     memoryStream.Position = 0;
 
-                    var properties = await blobClient.GetPropertiesAsync();
-                    var tags = await blobClient.GetTagsAsync();
-
                     var metadata = new GeneratedReportMetadata
                     {
                         Id = reportId,
-                        BlobName = taggedBlob.BlobName,
+                        BlobName = blobItem.Name,
                         OrgId = orgId,
                         UserExternalId = userExternalId,
-                        FileSizeBytes = properties.Value.ContentLength,
-                        GeneratedAt = properties.Value.CreatedOn?.UtcDateTime ?? DateTime.UtcNow
+                        FileSizeBytes = blobItem.Properties.ContentLength ?? 0,
+                        GeneratedAt = blobItem.Properties.CreatedOn?.UtcDateTime ?? DateTime.UtcNow
                     };
 
-                    if (tags.Value.Tags.TryGetValue("ReportName", out var reportName))
-                        metadata.ReportName = reportName;
-                    if (tags.Value.Tags.TryGetValue("LearnerExternalId", out var learnerId))
-                        metadata.LearnerExternalId = learnerId;
-                    if (tags.Value.Tags.TryGetValue("Format", out var format))
-                        metadata.Format = format;
+                    // Extract additional metadata
+                    if (blobItem.Metadata != null)
+                    {
+                        if (blobItem.Metadata.TryGetValue("ReportName", out var reportName))
+                            metadata.ReportName = reportName;
+                        if (blobItem.Metadata.TryGetValue("LearnerExternalId", out var learnerId))
+                            metadata.LearnerExternalId = learnerId;
+                        if (blobItem.Metadata.TryGetValue("LearnerName", out var learnerName))
+                            metadata.LearnerName = learnerName;
+                        if (blobItem.Metadata.TryGetValue("Format", out var format))
+                            metadata.Format = format;
+                    }
 
                     _logger.LogInformation(
-                        "Downloaded generated report: {ReportId} for user {UserExternalId}",
+                        "Downloaded generated report: {ReportId} for user {UserExternalId} in org {OrgId}",
                         SanitizeForLog(reportId),
-                        SanitizeForLog(userExternalId));
+                        SanitizeForLog(userExternalId),
+                        SanitizeForLog(orgId));
 
                     return (memoryStream, metadata);
                 }
@@ -357,28 +428,35 @@ namespace DXApplication1.Services
         {
             try
             {
-                var sanitizedOrgId = SanitizeTagValue(orgId);
-                var sanitizedUserExternalId = SanitizeTagValue(userExternalId);
-                var tagQuery = $"\"OrgId\" = '{sanitizedOrgId}' AND \"UserExternalId\" = '{sanitizedUserExternalId}'";
+                var containerClient = GetOrgContainer(orgId);
 
-                await foreach (var taggedBlob in _blobServiceClient.FindBlobsByTagsAsync(tagQuery))
+                // Check if container exists
+                if (!await containerClient.ExistsAsync())
                 {
-                    if (!taggedBlob.BlobContainerName.Equals(_containerName, StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    _logger.LogWarning(
+                        "Container not found for org {OrgId} when deleting report {ReportId}",
+                        SanitizeForLog(orgId),
+                        SanitizeForLog(reportId));
+                    return false;
+                }
 
-                    var blobReportId = ExtractReportId(taggedBlob.BlobName);
+                // List blobs with the user's prefix to find the matching report
+                var prefix = $"{SanitizeFileName(userExternalId)}/";
+
+                await foreach (var blobItem in containerClient.GetBlobsAsync(prefix: prefix))
+                {
+                    var blobReportId = ExtractReportId(blobItem.Name);
                     if (!blobReportId.Equals(reportId, StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    var containerClient = _blobServiceClient.GetBlobContainerClient(taggedBlob.BlobContainerName);
-                    var blobClient = containerClient.GetBlobClient(taggedBlob.BlobName);
-
+                    var blobClient = containerClient.GetBlobClient(blobItem.Name);
                     await blobClient.DeleteIfExistsAsync();
 
                     _logger.LogInformation(
-                        "Deleted generated report: {ReportId} for user {UserExternalId}",
+                        "Deleted generated report: {ReportId} for user {UserExternalId} in org {OrgId}",
                         SanitizeForLog(reportId),
-                        SanitizeForLog(userExternalId));
+                        SanitizeForLog(userExternalId),
+                        SanitizeForLog(orgId));
 
                     return true;
                 }

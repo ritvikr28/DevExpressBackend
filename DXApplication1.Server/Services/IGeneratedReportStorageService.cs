@@ -64,7 +64,8 @@ namespace DXApplication1.Services
 
     /// <summary>
     /// Service for storing and retrieving generated per-pupil reports in Azure Blob Storage.
-    /// Uses blob tags for efficient filtering by OrgId and UserExternalId.
+    /// Uses organization-based containers (one container per OrgId) with user-scoped blob paths.
+    /// Storage structure: {containerPrefix}-{orgId} / {userExternalId}/{reportName}_{learnerExternalId}_{timestamp}.{format}
     /// </summary>
     public interface IGeneratedReportStorageService
     {
@@ -90,7 +91,7 @@ namespace DXApplication1.Services
 
         /// <summary>
         /// Lists generated reports for a specific user (by OrgId and UserExternalId).
-        /// Uses blob tags for efficient filtering.
+        /// Uses prefix-based listing within the organization's container.
         /// </summary>
         /// <param name="orgId">Organization ID to filter by.</param>
         /// <param name="userExternalId">User's external ID to filter by.</param>
