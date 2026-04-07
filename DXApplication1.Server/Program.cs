@@ -22,8 +22,24 @@ var builder = WebApplication.CreateBuilder(args);
 AppDomain.CurrentDomain.SetData("DataDirectory", builder.Environment.ContentRootPath);
 builder.Services.AddDevExpressControls();
 
-// Register Azure Blob Storage service
+// Register Azure Blob Storage service for report templates
 builder.Services.AddSingleton<IAzureBlobStorageService, AzureBlobStorageService>();
+
+// Register Generated Report Storage service for per-pupil reports
+builder.Services.AddSingleton<IGeneratedReportStorageService, GeneratedReportStorageService>();
+
+// Register in-memory report session store (maps tokens to learner ID arrays)
+builder.Services.AddSingleton<ReportSessionStore>();
+
+// Register the authorization handler for forwarding bearer tokens to downstream APIs
+builder.Services.AddTransient<AuthorizationHandler>();
+
+// Register a named HttpClient that automatically forwards the bearer token
+builder.Services.AddHttpClient("AuthenticatedApi")
+    .AddHttpMessageHandler<AuthorizationHandler>();
+
+// Also keep the default unnamed HttpClient for general use
+builder.Services.AddHttpClient();
 
 builder.Services.AddClaimResolverServiceCollection();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

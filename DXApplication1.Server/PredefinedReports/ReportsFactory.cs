@@ -12,7 +12,8 @@ namespace DXApplication1.PredefinedReports
         {
             ["TestReport"] = () => new TestReport(),
             ["MultiSourceReport"] = () => new MultiSourceReport(),
-            ["FederatedReport"] = () => new FederatedReport()
+            ["FederatedReport"] = () => new FederatedReport(),
+            ["PupilReport"] = () => new PupilReport()
         };
     }
 }
