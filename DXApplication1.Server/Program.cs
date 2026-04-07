@@ -22,8 +22,11 @@ var builder = WebApplication.CreateBuilder(args);
 AppDomain.CurrentDomain.SetData("DataDirectory", builder.Environment.ContentRootPath);
 builder.Services.AddDevExpressControls();
 
-// Register Azure Blob Storage service
+// Register Azure Blob Storage service for report templates
 builder.Services.AddSingleton<IAzureBlobStorageService, AzureBlobStorageService>();
+
+// Register Generated Report Storage service for per-pupil reports
+builder.Services.AddSingleton<IGeneratedReportStorageService, GeneratedReportStorageService>();
 
 // Register in-memory report session store (maps tokens to learner ID arrays)
 builder.Services.AddSingleton<ReportSessionStore>();
