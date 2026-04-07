@@ -10,7 +10,7 @@ namespace DXApplication1.PredefinedReports
     /// 
     /// This report demonstrates the "Page Break per Pupil" pattern:
     /// - Groups data by identity.learnerExternalId (pupil ID)
-    /// - Sets PageBreak = AfterBand on the GroupHeaderBand
+    /// - Sets PageBreak = BeforeBandExceptFirstEntry on the GroupHeaderBand
     /// - Each pupil's data appears on a separate page within one document
     /// 
     /// Data Structure Expected:
