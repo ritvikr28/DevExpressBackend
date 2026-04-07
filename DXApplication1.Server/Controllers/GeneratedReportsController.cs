@@ -421,7 +421,7 @@ namespace DXApplication1.Server.Controllers
         /// <summary>
         /// Finds a specific learner's data from the API response.
         /// </summary>
-        private static string? FindLearnerData(string apiResponse, string learnerExternalId)
+        private string? FindLearnerData(string apiResponse, string learnerExternalId)
         {
             try
             {
@@ -429,6 +429,9 @@ namespace DXApplication1.Server.Controllers
                 if (!root.TryGetProperty("payload", out var payload) ||
                     !payload.TryGetProperty("learners", out var learners))
                 {
+                    _logger.LogWarning(
+                        "FindLearnerData: API response missing payload.learners structure for learner {LearnerExternalId}",
+                        SanitizeForLog(learnerExternalId));
                     return null;
                 }
 
@@ -443,9 +446,11 @@ namespace DXApplication1.Server.Controllers
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
-                // Return null if parsing fails
+                _logger.LogWarning(ex,
+                    "FindLearnerData: Failed to parse API response JSON for learner {LearnerExternalId}",
+                    SanitizeForLog(learnerExternalId));
             }
 
             return null;
