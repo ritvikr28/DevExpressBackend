@@ -41,8 +41,8 @@ namespace DXApplication1.Server.Controllers
         private static readonly Regex LogSanitizePattern = new Regex(@"[\r\n\t]+", RegexOptions.Compiled);
 
         // JWT claim types - these may vary by identity provider
-        private const string OrgIdClaimType = "org_id";
-        private const string ExternalIdClaimType = "external_id";
+        private const string OrgIdClaimType = "SIMSCX/OrganisationID";
+        private const string ExternalIdClaimType = "SIMSCX/ExternalID";
         private const string SubjectClaimType = "sub";
         private const string NameClaimType = "name";
 
@@ -58,7 +58,7 @@ namespace DXApplication1.Server.Controllers
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _learnersEndpoint = configuration["SimsApi:LearnersSearchEndpoint"]
-                ?? "https://apisql-dev.learners.sims.co.uk/api/v6/data-export/learners-search";
+                ?? "https://apisql-dev.learners.sims.co.uk/api/v5/data-export/learners-search";
         }
 
         /// <summary>
@@ -99,7 +99,7 @@ namespace DXApplication1.Server.Controllers
         /// Each learner gets their own individual PDF/Excel file stored in Azure Blob Storage.
         /// </summary>
         [HttpPost("generate-per-pupil")]
-        [SecurityDomain(["NG.Homepage.Access"], Operation.Create)]
+        [SecurityDomain(["NG.Homepage.Access"], Operation.View)]
         public async Task<IActionResult> GeneratePerPupilReports([FromBody] GeneratePerPupilRequest request)
         {
             if (request == null)
@@ -324,7 +324,7 @@ namespace DXApplication1.Server.Controllers
         /// Deletes a specific generated report.
         /// </summary>
         [HttpDelete("delete")]
-        [SecurityDomain(["NG.Homepage.Access"], Operation.Delete)]
+        [SecurityDomain(["NG.Homepage.Access"], Operation.View)]
         public async Task<IActionResult> DeleteReport([FromQuery] string reportId)
         {
             if (string.IsNullOrWhiteSpace(reportId))
