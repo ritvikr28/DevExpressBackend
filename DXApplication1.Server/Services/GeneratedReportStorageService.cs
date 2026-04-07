@@ -244,25 +244,6 @@ namespace DXApplication1.Services
             }
         }
 
-        /// <summary>
-        /// Sanitizes a metadata value for Azure Blob Storage.
-        /// Metadata values should be ASCII-safe strings.
-        /// </summary>
-        private static string SanitizeMetadataValue(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return "unknown";
-
-            // Replace non-ASCII and control characters
-            var result = Regex.Replace(value, @"[^\x20-\x7E]", "_");
-
-            // Truncate to reasonable length
-            if (result.Length > 1024)
-                result = result.Substring(0, 1024);
-
-            return result;
-        }
-
         public async Task<List<GeneratedReportMetadata>> ListUserReportsAsync(string orgId, string userExternalId)
         {
             var reports = new List<GeneratedReportMetadata>();
